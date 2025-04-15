@@ -1,0 +1,170 @@
+---
+title: "Q1"
+author: "Gowtham P" 
+output: html_document
+---
+
+
+1.	Load the dataset “WA_Fn-UseC_-Marketing-Customer-Value-Analysis.csv" using pd.read_csv() and perform the following tasks with appropriate interpretation:
+
+```{r}
+library(dplyr)
+library(ggplot2)
+```
+
+```{r}
+#### 1. Load Data ####
+df <- read.csv("D:/Data Science for Marketing-I& 2/dataset/WA_Fn-UseC_-Marketing-Customer-Value-Analysis.csv")
+```
+i. Perform basic exploratory data analysis (EDA) such as checking dataset shape and previewing the first few rows. What insights can be drawn from this initial exploration?
+
+```{r}
+head(df)
+```
+```{r}
+dim(df)
+```
+```{r}
+summary(df)
+```
+Interpertation:
+The dataset has 9134 rows and 24 columns,head() function is used to display the first few rows of a dataset. 
+
+
+ii. Analyze customer engagement by grouping data based on the Response variable. How does this grouping help in understanding customer behavior?
+
+```{r}
+# Encode engaged customers as 0s and 1s
+df$Engaged <- rep(0,nrow(df))
+df$Engaged[df$Response=='Yes']=1
+```
+
+
+
+
+```{r}
+## - Overall Engagement Rates ##
+engagementRate <- df %>% group_by(Response) %>%
+  summarise(Count=n())  %>%
+  mutate(EngagementRate=Count/nrow(df)*100.0)
+```
+
+iii. Visualize the engagement rate using a bar chart. What is the significance of this visualization, and how does the code achieve it?
+
+```{r}
+
+ggplot(engagementRate, aes(x=Response, y=EngagementRate)) +
+  geom_bar(width=0.5, stat="identity") +
+  ggtitle('Engagement Rate') +
+  xlab("Engaged") +
+  ylab("Percentage (%)") +
+  theme(plot.title = element_text(hjust = 0.5)) 
+```
+
+Interpertation: 
+
+Only 14.3% of customers responded positively, indicating a low engagement rate.
+This suggests a need for improved marketing strategies to boost response rates.
+
+iv. Calculate the engagement rate for different renewal offer types and interpret the results. Why is this metric useful?
+
+```{r}
+## - Engagement Rates by Offer Type ##
+engagementRateByOfferType <- df %>% 
+  group_by(Renew.Offer.Type) %>%
+  summarise(Count=n(), NumEngaged=sum(Engaged))  %>%
+  mutate(EngagementRate=NumEngaged/Count*100.0)
+engagementRateByOfferType
+
+ggplot(engagementRateByOfferType, aes(x=Renew.Offer.Type, y=EngagementRate)) +
+  geom_bar(width=0.5, stat="identity") +
+  ggtitle('Engagement Rates by Offer Type') +
+  xlab("Offer Type") +
+  ylab("Engagement Rate (%)") +
+  theme(plot.title = element_text(hjust = 0.5)) 
+```
+Interpertation: 
+
+Offer1 and Offer2 have the highest engagement rates (~16%), while Offer4 has the lowest (9.7%).
+This suggests that some offers are more attractive, guiding future marketing strategies.
+
+v. Extend the analysis by exploring engagement rates segmented by both Renew Offer Type and Vehicle Class. How does this multi-level grouping provide deeper insights?
+
+```{r}
+## - Offer Type & Vehicle Class ##
+engagementRateByOfferTypeVehicleClass <- df %>% 
+  group_by(Renew.Offer.Type, Vehicle.Class) %>%
+  summarise(NumEngaged=sum(Engaged))  %>%
+  left_join(engagementRateByOfferType[,c("Renew.Offer.Type", "Count")], by="Renew.Offer.Type") %>%
+  mutate(EngagementRate=NumEngaged/Count*100.0)
+
+ggplot(engagementRateByOfferTypeVehicleClass, aes(x=Renew.Offer.Type, y=EngagementRate, fill=Vehicle.Class)) +
+  geom_bar(width=0.5, stat="identity", position = "dodge") +
+  ggtitle('Engagement Rates by Offer Type & Vehicle Class') +
+  xlab("Offer Type") +
+  ylab("Engagement Rate (%)") +
+  theme(plot.title = element_text(hjust = 0.5)) 
+```
+Interpertation:
+
+More customers responded to Offer 2, especially those with Four-Door Cars. 
+Offers 3 and 4 had very few responses.
+
+vi. Perform customer segmentation using the variables ‘Customer Lifetime Value (CLV)’ and ‘Months Since Policy Inception’
+
+```{r}
+
+summary(df$Customer.Lifetime.Value)
+summary(df$Months.Since.Policy.Inception)
+
+clv_encode_fn <- function(x) {if(x > median(df$Customer.Lifetime.Value)) "High" else "Low"}
+df$CLV.Segment <- sapply(df$Customer.Lifetime.Value, clv_encode_fn)
+
+policy_age_encode_fn <- function(x) {if(x > median(df$Months.Since.Policy.Inception)) "High" else "Low"}
+df$Policy.Age.Segment <- sapply(df$Months.Since.Policy.Inception, policy_age_encode_fn)
+
+ggplot(
+  df[which(df$CLV.Segment=="High" & df$Policy.Age.Segment=="High"),], 
+  aes(x=Months.Since.Policy.Inception, y=log(Customer.Lifetime.Value))
+) +
+  geom_point(color='red') +
+  geom_point(
+    data=df[which(df$CLV.Segment=="High" & df$Policy.Age.Segment=="Low"),], 
+    color='orange'
+  ) +
+  geom_point(
+    data=df[which(df$CLV.Segment=="Low" & df$Policy.Age.Segment=="Low"),], 
+    color='green'
+  ) +
+  geom_point(
+    data=df[which(df$CLV.Segment=="Low" & df$Policy.Age.Segment=="High"),], 
+    color='blue'
+  ) +
+  ggtitle('Segments by CLV and Policy Age') +
+  xlab("Months Since Policy Inception") +
+  ylab("CLV (in log scale)") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+ Interpertation:
+ 
+Customers are classified into High/Low CLV and Early/Late Policy Age groups.
+This segmentation helps in prioritizing high-value customers for retention.
+
+
+vii. Create a visualization to compare CLV against Months Since Policy Inception
+
+```{r}
+engagementRateBySegment <- df %>% 
+  group_by(CLV.Segment, Policy.Age.Segment) %>%
+  summarise(Count=n(), NumEngaged=sum(Engaged))  %>%
+  mutate(EngagementRate=NumEngaged/Count*100.0)
+
+ggplot(engagementRateBySegment, aes(x=CLV.Segment, y=EngagementRate, fill=Policy.Age.Segment)) +
+  geom_bar(width=0.5, stat="identity", position = "dodge") +
+  ggtitle('Engagement Rates by Customer Segments') +
+  ylab("Engagement Rate (%)") +
+  theme(plot.title = element_text(hjust = 0.5)) 
+```
+
+Customers with high CLV stay longer, so it's good to keep them happy.  
+Customers with low CLV might leave early, so they need more attention.

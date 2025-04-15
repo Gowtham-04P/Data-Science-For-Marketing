@@ -1,0 +1,170 @@
+---
+title: "Q2"
+author: "Gowtham P" 
+output: html_document
+---
+
+  2. Using the "Marketing Customer Value Analysis" dataset, complete the following tasks 
+with proper analysis and interpretation:
+
+```{r}
+library(dplyr)
+library(ggplot2)
+```
+
+```{r}
+#### 1. Load Data ####
+df <- read.csv("D:/Data Science for Marketing-I& 2/dataset/WA_Fn-UseC_-Marketing-Customer-Value-Analysis.csv")
+```
+i. Create a new column named "Engaged" by transforming the categorical values in the "Response" variable into numerical values. Why is this transformation important?
+
+
+```{r}
+## 2.1. Response Variable: Response
+df$Engaged <- rep(0,nrow(df))
+df$Engaged[df$Response=='Yes']=1
+```
+Interpertation:
+
+This transformation converts categorical responses into numeric values.
+
+
+ii. Explain the process of creating dummy variables from the categorical features ['Sales Channel', 'Vehicle Size', 'Vehicle Class', 'Policy', 'Policy Type', 'Employment Status', 'Marital Status', 'Education', 'Coverage'] in the dataset. What function is used, and what is its significance in preparing the data for modeling?
+
+
+```{r}
+## 2.2. Categorical Features
+categoricalVars = c(
+  'Sales.Channel', 'Vehicle.Size', 'Vehicle.Class', 'Policy', 'Policy.Type',
+  'EmploymentStatus', 'Marital.Status', 'Education', 'Coverage', 'Gender'
+)
+
+encodedDF <- model.matrix(~.-1, df[categoricalVars])
+```
+Interpertation: 
+
+Dummy encoding converts categorical features into numerical format, allowing models to process them effectively.
+
+iii. Combine all features into a single dataset for model building.
+
+```{r}
+## 2.3. Continuous Features
+continuousFeatures <- c(
+  'Customer.Lifetime.Value', 'Income', 'Monthly.Premium.Auto',
+  'Months.Since.Last.Claim', 'Months.Since.Policy.Inception',
+  'Number.of.Open.Complaints', 'Number.of.Policies', 'Total.Claim.Amount'
+)
+
+encodedDF <- cbind(encodedDF, df[continuousFeatures])
+```
+Interpertation: 
+
+This ensures all relevant features, including numerical and dummy variables, are included for modeling.
+
+iv. Split the dataset into a 70:30 ratio for training and test data, and build a Random Forest model using the training data.
+
+
+```{r}
+# install.packages('caTools')
+library(caTools)
+```
+
+```{r}
+set.seed(123)
+sample <- sample.split(df$Customer, SplitRatio = .7)
+```
+
+```{r}
+trainX <- as.matrix(subset(encodedDF, sample == TRUE))
+trainY <- as.double(as.matrix(subset(df$Engaged, sample == TRUE)))
+```
+
+```{r}
+testX <- as.matrix(subset(encodedDF, sample == FALSE))
+testY <- as.double(as.matrix(subset(df$Engaged, sample == FALSE)))
+```
+Interpertation:
+
+The dataset is split into training (70%) and test (30%) sets, and a Random Forest model is trained to predict engagement.
+
+v. After fitting the Random Forest model, how can you interpret the output of rf_model.feature_importances_? What does this tell you about the features in the dataset?
+
+# - Training
+```{r}
+# install.packages('randomForest')
+library(randomForest)
+```
+
+```{r}
+rfModel <- randomForest(x=trainX, y=factor(trainY), ntree=200, maxnodes=24)
+```
+
+```{r}
+# - Individual Tree Predictions
+getTree(rfModel, 1)
+predict<-predict(rfModel, trainX, predict.all=TRUE)$individual
+head(predict, 5)
+```
+
+```{r}
+# - Feature Importances
+importance(rfModel)
+```
+Interpertation:
+
+Feature importance scores indicate which variables most influence engagement, helping in feature selection and understanding key drivers.
+
+vi. Discuss how you would evaluate the performance of the Random Forest model after making predictions on the training and test set. Use all possible metrics, and explain why they are important for assessing model effectiveness.
+
+
+```{r}
+inSamplePreds <- as.double(predict(rfModel, trainX)) - 1
+outSamplePreds <- as.double(predict(rfModel, testX)) - 1
+```
+
+```{r}
+# - Accuracy, Precision, and Recall
+inSampleAccuracy <- mean(trainY == inSamplePreds)
+outSampleAccuracy <- mean(testY == outSamplePreds)
+print(sprintf('In-Sample Accuracy: %0.4f', inSampleAccuracy))
+print(sprintf('Out-Sample Accuracy: %0.4f', outSampleAccuracy))
+
+inSamplePrecision <- sum(inSamplePreds & trainY) / sum(inSamplePreds)
+outSamplePrecision <- sum(outSamplePreds & testY) / sum(outSamplePreds)
+print(sprintf('In-Sample Precision: %0.4f', inSamplePrecision))
+print(sprintf('Out-Sample Precision: %0.4f', outSamplePrecision))
+
+inSampleRecall <- sum(inSamplePreds & trainY) / sum(trainY)
+outSampleRecall <- sum(outSamplePreds & testY) / sum(testY)
+print(sprintf('In-Sample Recall: %0.4f', inSampleRecall))
+print(sprintf('Out-Sample Recall: %0.4f', outSampleRecall))
+```
+
+# - ROC & AUC
+```{r}
+# install.packages('ROCR')
+library(ROCR)
+```
+
+```{r}
+inSamplePredProbs <- as.double(predict(rfModel, trainX, type='prob')[,2])
+outSamplePredProbs <- as.double(predict(rfModel, testX, type='prob')[,2])
+
+pred <- prediction(outSamplePredProbs, testY)
+perf <- performance(pred, measure = "tpr", x.measure = "fpr") 
+auc <- performance(pred, measure='auc')@y.values[[1]]
+
+plot(
+  perf, 
+  main = sprintf('Random Forest Model ROC Curve (AUC: %0.2f)', auc), 
+  col = 'darkorange', 
+  lwd = 2
+)
+grid()  # Call grid() separately
+abline(a = 0, b = 1, col = 'darkgray', lty = 3, lwd = 2)
+
+
+```
+Interpertation: 
+
+Accuracy, confusion matrix, and AUC-ROC score assess how well the model predicts engagement, ensuring reliability in business decisions.
